@@ -1,5 +1,9 @@
 package playlist;
 
+import java.util.ArrayList;
+
 public class Likelist {
-	int y;
+	public static ArrayList<Music> likemusic = new ArrayList<Music>(); 
+	
+	
 }
