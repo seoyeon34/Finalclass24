@@ -35,10 +35,15 @@ public class Login extends JFrame {
         JButton signUpBtn = new JButton("회원가입");
         c.add(signUpBtn);
         c.add(new JLabel(""));
+        
+        JButton forgotBtn = new JButton("비밀번호 찾기");
+        c.add(forgotBtn);
+        c.add(new JLabel(""));
 
         loginBtn.addActionListener(new MyActionListener());
         signUpBtn.addActionListener(new MyActionListener());
-
+        forgotBtn.addActionListener(new MyActionListener());
+        
         setSize(300, 250);
         setVisible(true);
     }
@@ -56,6 +61,8 @@ public class Login extends JFrame {
                     JOptionPane.showMessageDialog(Login.this, "회원가입을 먼저 해주세요.");
                 } else if (inputID.equals(SignUp.ID) && inputPW.equals(SignUp.PW)) {
                     JOptionPane.showMessageDialog(Login.this, "로그인이 완료되었습니다. ");
+                    
+                    new Subscribe();
                 } else {
                     JOptionPane.showMessageDialog(Login.this, "아이디 또는 비밀번호가 틀렸습니다. 다시 입력해주세요.");
                 }
@@ -63,6 +70,9 @@ public class Login extends JFrame {
 
             if (b.getText().equals("회원가입")) {
                 new SignUp();
+            }
+            if (b.getText().equals("비밀번호 찾기")) {
+                new ForgotPassword();
             }
         }
     }
