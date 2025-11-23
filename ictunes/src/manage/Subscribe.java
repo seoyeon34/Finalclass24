@@ -32,17 +32,19 @@ public class Subscribe extends JFrame {
     }
 
     private JPanel createSelectPanel() {
-        JPanel panel = new JPanel(new GridLayout(4, 1, 5, 5));
+        JPanel panel = new JPanel(new GridLayout(5, 1, 5, 5));
 
         JLabel title = new JLabel("정기구독 서비스", SwingConstants.CENTER);
         panel.add(title);
 
         JButton monthBtn = new JButton("월간 구독");
         JButton yearBtn = new JButton("연간 구독");
+        JButton noSubscribeBtn = new JButton("구독 안 함");
         JButton closeBtn = new JButton("닫기");
 
         panel.add(monthBtn);
         panel.add(yearBtn);
+        panel.add(noSubscribeBtn);
         panel.add(closeBtn);
 
         monthBtn.addActionListener(new ActionListener() {
@@ -62,6 +64,12 @@ public class Subscribe extends JFrame {
                 price = 99000;
                 updateDetailPanel();
                 cardLayout.show(mainPanel, "DETAIL");
+            }
+        });
+        
+        noSubscribeBtn.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
             }
         });
 
@@ -100,7 +108,7 @@ public class Subscribe extends JFrame {
                 );
 
                 if (result == JOptionPane.YES_OPTION) {
-                    JOptionPane.showMessageDialog(Subscribe.this, "결제가 완료되었습니다!");
+                    JOptionPane.showMessageDialog(Subscribe.this, "결제 완료");
                 }
             }
         });
