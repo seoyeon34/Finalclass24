@@ -1,15 +1,17 @@
 package manage;
 
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 import javax.swing.*;
 
 public class SignUp extends JFrame {
 
     public static String ID = "";
     public static String PW = "";
+    public static String PHONE = "";
 
+    JTextField nameField;
+    JTextField phoneField;
     JTextField idField;
     JTextField pwField;
 
@@ -24,17 +26,19 @@ public class SignUp extends JFrame {
         c.setLayout(grid);
 
         c.add(new JLabel("이름"));
-        c.add(new JTextField(""));
+        nameField = new JTextField("");
+        c.add(nameField);
 
         c.add(new JLabel("전화번호"));
-        c.add(new JTextField(""));
+        phoneField = new JTextField("");
+        c.add(phoneField);
 
         c.add(new JLabel("아이디"));
-        idField = new JTextField(""); 
+        idField = new JTextField("");
         c.add(idField);
 
         c.add(new JLabel("패스워드"));
-        pwField = new JTextField(""); 
+        pwField = new JTextField("");
         c.add(pwField);
 
         JButton completeBtn = new JButton("회원가입 완료");
@@ -60,9 +64,10 @@ public class SignUp extends JFrame {
             if (b.getText().equals("회원가입 완료")) {
                 ID = idField.getText();
                 PW = pwField.getText();
+                PHONE = phoneField.getText();
 
-                if (ID.equals("") || PW.equals("")) {
-                    JOptionPane.showMessageDialog(SignUp.this, "아이디와 패스워드를 입력하세요.");
+                if (ID.equals("") || PW.equals("") || PHONE.equals("")) {
+                    JOptionPane.showMessageDialog(SignUp.this, "정보를 모두 입력하세요.");
                     return;
                 }
 
