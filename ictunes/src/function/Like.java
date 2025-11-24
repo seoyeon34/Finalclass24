@@ -1,81 +1,74 @@
 package function;
 
 import java.util.ArrayList;
-package function;
-
-import java.util.ArrayList;
 
 import playlist.*;
 
 public class Like {
 	// Like Array에 AllMusicList 순서대로 좋아요 목록 새로 만듦 
-	// allMusic Array에 곡마다 index=4에 Like allMusic.add로 시도했는데 실패 
-	public static ArrayList<Music> Like = new ArrayList<>();
-	Music m;
+	public static ArrayList<Integer> Like = new ArrayList<>();
+	Music m;	
+	int index;
+	
+	// Like array 처음 초기화 -> main에서 한번 실행 
+	private void initialize() {
+		for(int index = 0; index < 15; index++) {
+			Like.add(index, 0); }
+	}
+	
+	// title-index matching  
+	public int titleIndex(String title) {
+		m.title = title;
+		
+		if(m.title == "응급실") {
+			return index = 0;
+		} else if(m.title == "한번 더 이별") {
+			return index = 1;
+		} else if(m.title == "이별하러 가는 길") {
+			return index = 2;
+		} 
+		else if(m.title == "Yours") {
+			return index = 3;
+		} else if(m.title == "나무") {
+			return index = 4;
+		} else if(m.title == "좋은 밤 좋은 꿈") {
+			return index = 5;
+		}
+		else if(m.title == "죽일놈") {
+			return index = 6;
+		} else if(m.title == "Aqua man") {
+			return index = 7;
+		} else if(m.title == "D") {
+			return index = 8;
+		}
+		else if(m.title == "All I want for Christmas is you") {
+			return index = 9;
+		} else if(m.title == "When I was your man") {
+			return index = 10;
+		} else if(m.title == "Off my face") {
+			return index = 11;
+		}
+		else if(m.title == "Golden") {
+			return index = 12;
+		} else if(m.title == "Blue valentine") {
+			return index = 13;
+		} else if(m.title == "Drama") {
+			return index = 14;
+		}
+		return index;
+	}
 	
 	public Like(String title, int l) {
-		m.title = title;
+		int index = titleIndex(title);
+		
 		showLike();
 		
 		if(l == 1) {
-			if(m.title == "응급실") {
-				Like.add(0, new Music(1));
-			} else if(m.title == "한번 더 이별") {
-				Like.add(1, new Music(1));
-			} else if(m.title == "이별하러 가는 길") {
-				Like.add(2, new Music(1));
-			} 
-			else if(m.title == "Yours") {
-				Like.add(3, new Music(1));
-			} else if(m.title == "나무") {
-				Like.add(4, new Music(1));
-			} else if(m.title == "좋은 밤 좋은 꿈") {
-				Like.add(5, new Music(1));
-			}
-			else if(m.title == "죽일놈") {
-				Like.add(6, new Music(1));
-			} else if(m.title == "Aqua man") {
-				Like.add(7, new Music(1));
-			} else if(m.title == "D") {
-				Like.add(8, new Music(1));
-			}
-			else if(m.title == "All I want for Christmas is you") {
-				Like.add(9, new Music(1));
-			} else if(m.title == "When I was your man") {
-				Like.add(10, new Music(1));
-			} else if(m.title == "Off my face") {
-				Like.add(11, new Music(1));
-			}
-			else if(m.title == "Golden") {
-				Like.add(12, new Music(1));
-			} else if(m.title == "Blue valentine") {
-				Like.add(13, new Music(1));
-			} else if(m.title == "Drama") {
-				Like.add(14, new Music(1));
-			}
-			
+			Like.add(index, 1); 	// Like array가 l=1이면 좋아요 저장 
 		} else return;
-			
 		}
+	
 	public void showLike() {
 		System.out.println("(좋아요)한 노래입니다.");
-	}
-}
-
-import playlist.AllMusicList;
-import playlist.Music;
-
-public class Like {
-	AllMusicList s = null;
-	ArrayList<Music> allmusic = s.allMusic;
-	
-	public void Like(int l) {
-	
-		if(l == 1) {
-			
-		} else {
-			
-		}	
-		
 	}
 }
