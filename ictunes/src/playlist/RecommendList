@@ -1,0 +1,51 @@
+package playlist;
+
+import java.util.ArrayList;
+
+public class RecommendList {
+	
+	public static ArrayList<Music> recommend = new ArrayList<>();
+
+  // 사용자가 듣고 있는 음악 받기
+	public static void showRecommend(Music currentMusic) { //currentMusic 메인에서 정의필요!!!
+		recommend.clear(); //추천곡 기존에 있는 거 삭제
+		
+		String currentGenre = currentMusic.getGenre();
+		String currentTitle = currentMusic.getTitle();
+		
+		int count =0; //추천한 곡 개수
+		
+		for (Music m: AllMusicList.allMusic) {
+			if(m.getGenre().equals(currentGenre)) { // 장르 같으면 추천되는 로직
+				if(!m.getTitle().equals(currentTitle)) { // 현재듣는 곡은 제외해야됨
+					
+					recommend.add(m);
+					count++;
+					
+					if(count==2) //현재곡 제외하면 남은 곡 2개니깐 2곡 찾으면 바로 멈춤
+						break;
+				}
+			}
+		}
+		
+	}
+	
+	public static void showRecommend() {
+		System.out.println("\n 추천 음악 목록");
+		
+		if(recommend.size() ==0) {
+			System.out.println("추천할 음악이 없습니다.");
+			return;
+		}
+
+    // 번호 붙이면서 출력
+		int num =1; //1번부터 보여주겠다
+		
+		for(Music m: recommend) {
+			System.out.println(num + "." + m.toString());
+			num++;
+		}
+		
+	}
+
+}
