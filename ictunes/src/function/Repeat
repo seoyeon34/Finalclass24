@@ -1,0 +1,36 @@
+package function;
+
+import playlist.Playlist;
+import playlist.Music;
+
+public class Repeat {
+
+	//무한재생 false로 기본값 저장
+	public static boolean repeatOn = false;
+	
+	public static void changeRepeat() {
+		repeatOn = !repeatOn;
+		
+		if(repeatOn) {
+			System.out.println("repeatOn");
+		
+		}else {
+			System.out.println("repeatOff");
+		}
+	}
+	
+	public static boolean repeatCheck() {
+		// 재생목록 비어있으면 무한재생 불가
+		if(Playlist.AddMusicList.size() ==0) {
+			System.out.println("재생 목록이 비어있습니다.");
+			return true; //다음 곡이 없으니깐 true(무한재생)
+		}
+		
+		if(repeatOn) {
+			System.out.println("repeatOn");
+			return true;
+		}
+		
+		return false; // repeatOff일 때
+	}
+}
