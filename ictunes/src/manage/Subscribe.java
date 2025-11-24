@@ -16,12 +16,14 @@ public class Subscribe extends JFrame {
     private JLabel titleLabel;
     
     public Subscribe() {
+        //GUI 설정
         setTitle("정기구독");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         cardLayout = new CardLayout();
         mainPanel = new JPanel(cardLayout);
 
+        //구독 선택 화면이랑 구독 정보/결제 화면 관리
         mainPanel.add(createSelectPanel(), "SELECT");
         mainPanel.add(createDetailPanel(), "DETAIL");
 
@@ -31,6 +33,7 @@ public class Subscribe extends JFrame {
         setVisible(true);
     }
 
+    //구독 선택 화면
     private JPanel createSelectPanel() {
         JPanel panel = new JPanel(new GridLayout(5, 1, 5, 5));
 
@@ -47,6 +50,7 @@ public class Subscribe extends JFrame {
         panel.add(noSubscribeBtn);
         panel.add(closeBtn);
 
+        //월간구독 눌렀을 때
         monthBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -57,6 +61,7 @@ public class Subscribe extends JFrame {
             }
         });
 
+        //연간구독 눌렀을 때
         yearBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -66,7 +71,8 @@ public class Subscribe extends JFrame {
                 cardLayout.show(mainPanel, "DETAIL");
             }
         });
-        
+
+        //구독 안함 눌렀을 때 (아직 기능 연결 안함)
         noSubscribeBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -83,6 +89,7 @@ public class Subscribe extends JFrame {
         return panel;
     }
 
+    //구독했을 때 기능 보여주는 화면 
     private JPanel createDetailPanel() {
         JPanel panel = new JPanel(new GridLayout(6, 1, 5, 5));
 
@@ -97,6 +104,7 @@ public class Subscribe extends JFrame {
         JButton payBtn = new JButton("결제하기");
         panel.add(payBtn);
 
+        //결제 버튼 눌렀을 때
         payBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
