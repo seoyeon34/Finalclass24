@@ -10,7 +10,7 @@ public class Likelist {
 	ArrayList<Integer> Like;
 	
 	// index에 따라 title matching
-	public String indexTitle(int n) {
+	public String indexTitle(int n) {	// n = showMusic index
 		String title;
 		AllMusicList.showMusic();
 		Music input = allMusic.get(4*n+n);	// AllMusicList 기준 title 배열 index = 4*n + n
