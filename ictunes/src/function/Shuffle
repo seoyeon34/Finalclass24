@@ -1,0 +1,75 @@
+package function;
+
+import java.util.Random;
+import playlist.Playlist;
+import playlist.Music;
+
+public class Shuffle {
+	
+	// 현재 몇 번째 노래를 재생 중인지
+	public static int currentIndex = 0;
+	
+	// false를 기본값으로 해놓은 이유는 shuffle은 부가적 기능이니깐 처음엔 꺼진 상태로 동작
+	public static boolean shuffleOn = false;
+	
+	public static Random random = new Random();
+	
+	// shuffle on/off 바꾸는
+	public static void changeShuffle() {
+		shuffleOn = !shuffleOn; 
+		
+		if(shuffleOn) {
+			System.out.println("shuffle On");
+		}else {
+			System.out.println("shuffle Off");
+		}
+	}
+	
+	public static void nextMusic() {
+		
+		//재생목록 비어 있으면 재생 불가능
+		if(Playlist.AddMusicList.size() ==0) {
+			System.out.println("재생 목록이 비어있습니다.");
+			return;
+		}
+		
+		// shuffleOn되면 랜덤으로 다음 곡 선정됨
+		if(shuffleOn) {
+			int newIndex = currentIndex;
+			
+			//같은 곡 반복되지 않게! 랜덤으로
+			while (newIndex == currentIndex ) {
+				newIndex = random.nextInt(Playlist.AddMusicList.size()); // playlist size 안에서 랜덤 숫자를 하나 뽑음
+			}
+			
+			// 현재 곡과 다른 번호 뽑히면 currentIndex에 넣기
+			currentIndex = newIndex;
+		}
+		
+		// shuffleOff 되면 순서대로 다음 곡 
+		else {
+			currentIndex++;
+			
+			//마지막 곡으로 이동하면 다시 처음 곡으로 이동
+			if(currentIndex >= Playlist.AddMusicList.size()) {
+				currentIndex = 0;
+			}
+		}
+		
+	}
+	
+	public static Music getCurrentMusic() {
+		
+		if(Playlist.AddMusicList.size() == 0) {
+			System.out.println("재생할 음악이 없습니다.");
+			return null;
+		}else { 
+			return Playlist.AddMusicList.get(currentIndex); 
+		}
+		
+		}
+		
+	}
+
+	
+}
