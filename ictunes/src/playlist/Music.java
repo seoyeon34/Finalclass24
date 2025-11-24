@@ -15,10 +15,6 @@ public class Music {
 		this.year = year;	
 	}
 	
-	public Music(String title, String artist, String genre, int year, int like) {
-		this.like = like;
-	}
-	
 	public String getTitle() {
 		return title;
 	}
@@ -31,9 +27,6 @@ public class Music {
 	}
 	public int getYear() {
 		return year;
-	}
-	public int getLike() {
-		return like;
 	}
 	
 	public String toSting() {
