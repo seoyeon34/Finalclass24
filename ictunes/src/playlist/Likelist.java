@@ -9,7 +9,7 @@ public class Likelist {
 	ArrayList<Music> allMusic;
 	ArrayList<Integer> Like;
 	
-	// title-index matching  
+	// index에 따라 title matching
 	public String indexTitle(int n) {
 		String title;
 		AllMusicList.showMusic();
@@ -17,7 +17,8 @@ public class Likelist {
 		
 		return title = input.getTitle();
 	}
-	
+
+	// constructor
 	public Likelist() {
 		String liketitle;
 		
@@ -28,9 +29,10 @@ public class Likelist {
 				Likemusic.add(liketitle);
 			}
 		} 
-		showLike();	// 좋아요 목록 출력 
+		showLike();	
 	}
-	
+
+	// 좋아요 목록 출력
 	public void showLike() {
 		for(int i = 0; i < Likemusic.size(); i++) {
 		System.out.println((i+1) + ". " + Likemusic.toString()); }
