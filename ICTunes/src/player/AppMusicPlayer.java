@@ -1,395 +1,634 @@
 package player;
 
-import audio.WAVAudioFile;          // 재생 가능한 WAV 파일 객체
-import audio.MusicPlaybackException; // 음악 재생 예외
-import audio.MusicFileNotFoundException; // 음악 파일 없음 예외
-import model.Music;                 // 음악 메타데이터 (WAVAudioFile 내부에서 사용)
-import playlist.RecommendationManager; // 추천 음악 관리자
-import gui.MusicPlayerGUI;          // GUI 업데이트를 위해 MusicPlayerGUI에 대한 참조 (옵션, 필요한 경우 사용)
+import audio.MusicFileNotFoundException;
+import audio.MusicPlaybackException;
+import audio.WAVAudioFile;
+import gui.MusicPlayerGUI;
+import model.Music;
 
 import javax.sound.sampled.LineEvent;
-import javax.swing.SwingUtilities;
+import javax.sound.sampled.LineListener;
+import javax.sound.sampled.Clip; 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-/**
- * ICTunes 음악 스트리밍 애플리케이션의 핵심 재생 로직을 관리하는 클래스입니다.
- * 재생 목록 관리, 재생 제어(재생/일시정지/정지), 반복/셔플 모드, 좋아요 기능, 추천 기능 등을 통합합니다.
+/*
+ * 음악 재생을 관리하는 클래스.
+ * 재생 목록, 현재 재생 상태, 셔플/반복 모드 등을 처리.
  */
-public class AppMusicPlayer {
 
-    private List<WAVAudioFile> playlist;         // 현재 재생 목록
-    private int currentPlayingIndex = -1;        // 현재 재생 중인 곡의 인덱스
-    private WAVAudioFile currentAudioFile;       // 현재 재생 중인 WAVAudioFile 객체
+public class AppMusicPlayer implements LineListener {
 
-    private boolean isShuffleMode = false;       // 셔플 모드 여부
-    private boolean isRepeatMode = false;        // 반복 모드 여부 (단일 곡 반복)
-    private Random random;                       // 셔플을 위한 Random 객체
+    private MusicPlayerGUI gui; 
+    private List<WAVAudioFile> playlist; 
+    private List<WAVAudioFile> originalPlaylist; 
+    private List<Music> allMusicList; 
 
-    private RecommendationManager recommendationManager; // 추천 관리자
-    private MusicPlayerGUI gui; // GUI에 특정 이벤트를 통지하기 위한 참조 (선택 사항)
+    private WAVAudioFile currentAudioFile; 
+    private int currentSongIndex; 
 
-    public AppMusicPlayer(MusicPlayerGUI gui) {
+    private boolean isPlaying; 
+    private boolean isPaused; 
+    private boolean shuffleMode; 
+    private boolean repeatMode; 
+    private Random random; 
+    
+    private float masterVolume = 0.5f; 
+
+    private static final int MAX_PLAYLIST_SIZE = 15; 
+
+    public AppMusicPlayer(MusicPlayerGUI gui, List<Music> allMusicList) {
+        this.gui = gui;
+        this.allMusicList = allMusicList;
         this.playlist = new ArrayList<>();
+        this.originalPlaylist = new ArrayList<>();
+        this.currentSongIndex = -1;
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.shuffleMode = false;
+        this.repeatMode = false;
         this.random = new Random();
-        this.recommendationManager = new RecommendationManager(); // 추천 관리자 초기화
-        this.gui = gui; // GUI 참조 설정
     }
 
-    /**
-     * AppMusicPlayer를 초기화할 때 MusicPlayerGUI 참조 없이 초기화하는 경우 (필요에 따라)
-     */
-    public AppMusicPlayer() {
-        this(null); // 다른 생성자 호출
+    public void setPlaylist(List<Music> musicList) throws MusicPlaybackException {
+        stopPlaybackAndClearInternalLists();
+
+        for (model.Music music : musicList) {
+            try {
+                if (originalPlaylist.size() >= MAX_PLAYLIST_SIZE) {
+                    System.err.println("플레이리스트가 가득 찼습니다. " + MAX_PLAYLIST_SIZE + "곡까지만 추가할 수 있습니다.");
+                    break; 
+                }
+                WAVAudioFile audioFile = new WAVAudioFile(music);
+                audioFile.addLineListener(this); 
+                this.originalPlaylist.add(audioFile); 
+            } catch (MusicFileNotFoundException | MusicPlaybackException e) {
+                System.err.println("음악 파일 로드 실패 (경로: " + music.getFilePath() + "): " + e.getMessage());
+            }
+        }
+        
+        this.playlist.addAll(this.originalPlaylist);
+
+        if (!this.playlist.isEmpty()) {
+            currentSongIndex = 0;
+            currentAudioFile = playlist.get(currentSongIndex);
+            currentAudioFile.setVolume(masterVolume);
+        } else {
+            currentSongIndex = -1;
+            currentAudioFile = null;
+        }
+        gui.updatePlayerUI();
     }
 
-    /**
-     * 재생 목록에 WAVAudioFile을 추가합니다.
-     * @param audioFile 추가할 WAVAudioFile 객체
-     */
-    public void addSong(WAVAudioFile audioFile) {
-        if (audioFile == null) return;
-        // WAVAudioFile 내부의 playback.MusicPlayer에 리스너를 추가합니다.
-        // 이 리스너는 곡이 끝났을 때 다음 곡으로 넘어가도록 지시합니다.
-        audioFile.addPlaybackListener(event -> {
-            if (event.getType() == LineEvent.Type.STOP && currentAudioFile != null && !currentAudioFile.isPaused()) {
-                // 이 이벤트가 발생했으나 일시정지 상태가 아니라면 (즉, 재생이 자연스럽게 끝났다면)
-                SwingUtilities.invokeLater(() -> {
-                    try {
-                        next(); // 다음 곡으로 자동으로 넘어갑니다.
-                        if (gui != null) gui.updatePlayerUI(); // GUI 업데이트 요청
-                    } catch (MusicPlaybackException e) {
-                        System.err.println("다음 곡 자동 재생 중 오류 발생: " + e.getMessage());
-                        // GUI에 오류 메시지를 표시할 수도 있습니다.
-                        if (gui != null) gui.displayErrorMessage("자동 재생 오류", "다음 곡 재생 중 오류: " + e.getMessage());
+    public void addSong(WAVAudioFile audioFile) throws MusicPlaybackException {
+        if (originalPlaylist.size() >= MAX_PLAYLIST_SIZE) {
+            throw new MusicPlaybackException("플레이리스트가 가득 찼습니다. " + MAX_PLAYLIST_SIZE + "곡까지만 추가할 수 있습니다.");
+        }
+        if (originalPlaylist.contains(audioFile)) { 
+            throw new MusicPlaybackException("'" + audioFile.getTitle() + "'은(는) 이미 재생 목록에 있습니다.");
+        }
+        audioFile.addLineListener(this); 
+        audioFile.setVolume(masterVolume);
+
+        originalPlaylist.add(audioFile);
+        playlist.add(audioFile); 
+
+        if (currentAudioFile == null && playlist.size() == 1) {
+            currentSongIndex = 0;
+            currentAudioFile = playlist.get(currentSongIndex);
+            currentAudioFile.setVolume(masterVolume);
+        }
+        
+        if(shuffleMode){
+            WAVAudioFile playingBeforeShuffle = currentAudioFile; 
+            Collections.shuffle(playlist, random); 
+            
+            if(playingBeforeShuffle != null) {
+                int newIndex = -1;
+                 for (int i = 0; i < playlist.size(); i++) {
+                    if (playlist.get(i).equals(playingBeforeShuffle)) {
+                        newIndex = i;
+                        break;
                     }
-                });
+                }
+                if (newIndex != -1) {
+                    currentSongIndex = newIndex;
+                    currentAudioFile = playlist.get(currentSongIndex);
+                }
+                else if (!playlist.isEmpty()){ 
+                    currentSongIndex = 0;
+                    currentAudioFile = playlist.get(0);
+                } else { 
+                    currentSongIndex = -1;
+                    currentAudioFile = null;
+                }
+            } else if (!playlist.isEmpty()){ 
+                currentSongIndex = 0;
+                currentAudioFile = playlist.get(0);
+            } else { 
+                currentSongIndex = -1;
+                currentAudioFile = null;
             }
-        });
-        playlist.add(audioFile);
-        System.out.println("재생 목록에 추가: " + audioFile.getTitle());
+        }
     }
     
-    /**
-     * 주어진 Music 객체 리스트를 재생 목록으로 설정합니다. 기존 목록은 지워집니다.
-     * @param musicList 설정할 Music 객체 리스트
-     */
-    public void setPlaylist(List<Music> musicList) throws MusicFileNotFoundException, MusicPlaybackException {
-        closeAllAudioFiles(); // 기존 재생 목록 리소스 해제
-        this.playlist.clear(); // 기존 목록 지우기
-        for (Music m : musicList) {
-            // WAVAudioFile 생성자에서 파일 유효성을 검사합니다.
-            // "empty_file_path"와 같은 더미 경로인 경우, 실제 파일 재생은 시도하지 않습니다.
-            // AppMusicPlayer는 실제 재생 가능한 WAVAudioFile만 관리해야 하므로, 임시 Music 객체는 여기에 추가하지 않습니다.
-            // 다만, GUI JList에서 임시 메시지를 WAVAudioFile로 보여주기 위해 "empty_file_path" Music 객체 생성을 허용한 것이므로,
-            // 이곳에서는 실제 파일 경로가 있는 Music 객체만 WAVAudioFile로 생성하여 추가하는 것이 좋습니다.
-            if (m.getFilePath() != null && !m.getFilePath().trim().isEmpty() && !"empty_file_path".equals(m.getFilePath())) {
-                 this.playlist.add(new WAVAudioFile(m)); // Music 객체를 WAVAudioFile로 변환하여 추가
+    public void removeSong(WAVAudioFile audioFile) throws MusicPlaybackException {
+        if (!originalPlaylist.contains(audioFile)) {
+            throw new MusicPlaybackException("'" + audioFile.getTitle() + "'은(는) 재생 목록에 없습니다.");
+        }
+
+        if (currentAudioFile != null && currentAudioFile.equals(audioFile)) {
+            try {
+                stop();
+            } catch (MusicPlaybackException e) {
+                System.err.println("제거하려는 곡 재생 중지 중 오류: " + e.getMessage());
             }
         }
-        if (!playlist.isEmpty()) {
-            currentPlayingIndex = 0; // 새 재생 목록의 첫 곡으로 인덱스 설정
-        } else {
-            currentPlayingIndex = -1;
-        }
-        currentAudioFile = null; // 현재 재생 중인 파일 초기화
-        System.out.println("새 재생 목록 설정 완료. 총 " + playlist.size() + "곡.");
-    }
-
-    /**
-     * 현재 인덱스의 음악을 재생합니다.
-     * @throws MusicPlaybackException 재생 중 오류 발생 시
-     */
-    public void play() throws MusicPlaybackException {
-        if (playlist.isEmpty()) {
-            throw new MusicPlaybackException("재생 목록이 비어 있습니다.");
-        }
-        if (currentPlayingIndex == -1) { // 재생 목록이 있으나 아직 시작되지 않았을 때
-            currentPlayingIndex = 0;
-        }
-
-        // 현재 곡이 이미 재생 중이라면 중복 재생 방지
-        if (currentAudioFile != null && currentAudioFile.isPlaying()) {
-            return;
-        }
-
-        // 현재 재생 중인 곡이 일시정지 상태였으면 이어서 재생
-        if (currentAudioFile != null && currentAudioFile.isPaused()) {
-            currentAudioFile.play();
-            System.out.println("재개: " + currentAudioFile.getTitle());
-            return;
-        }
         
-        // 새로 재생 시작 (다른 곡을 선택하거나 완전히 정지된 상태에서)
-        play(currentPlayingIndex);
-    }
-    
-    /**
-     * 지정된 인덱스의 음악을 재생합니다.
-     * @param index 재생할 음악의 재생 목록 내 인덱스
-     * @throws MusicPlaybackException 재생 중 오류 발생 시
-     */
-    public void play(int index) throws MusicPlaybackException {
-        if (playlist.isEmpty() || index < 0 || index >= playlist.size()) {
-            throw new MusicPlaybackException("유효하지 않은 재생 인덱스입니다: " + index);
-        }
+        originalPlaylist.remove(audioFile);
+        playlist.remove(audioFile);
 
-        // 이전에 재생 중이던 곡이 있다면 중지하고 리소스 해제
-        if (currentAudioFile != null) {
-            currentAudioFile.stop();
-        }
-
-        currentPlayingIndex = index;
-        currentAudioFile = playlist.get(currentPlayingIndex);
-        
-        // WAVAudioFile이 실제 파일 경로가 아닌 메시지를 담은 임시 객체일 경우 재생 시도하지 않음
-        if ("empty_file_path".equals(currentAudioFile.getFilePath())) {
-            throw new MusicPlaybackException("이 음악은 메시지이며 재생할 수 없습니다.");
-        }
-
-        currentAudioFile.play(); // 해당 WAVAudioFile 객체의 play 메서드 호출
-        System.out.println("재생 시작: " + currentAudioFile.getTitle());
-    }
-
-    /**
-     * 현재 재생 중인 음악을 일시정지합니다.
-     * @throws MusicPlaybackException 일시정지 중 오류 발생 시
-     */
-    public void pause() throws MusicPlaybackException {
-        if (currentAudioFile == null) {
-            throw new MusicPlaybackException("현재 재생 중인 곡이 없습니다.");
-        }
-        if (currentAudioFile.isPlaying()) { // 재생 중일 때만 일시정지
-            currentAudioFile.pause();
-            System.out.println("일시정지: " + currentAudioFile.getTitle());
-        }
-    }
-
-    /**
-     * 현재 재생 중인 음악을 완전히 중지하고 초기화합니다.
-     * @throws MusicPlaybackException 중지 중 오류 발생 시
-     */
-    public void stop() throws MusicPlaybackException {
-        if (currentAudioFile == null) {
-            System.out.println("현재 재생 중인 곡이 없어 중지할 것이 없습니다.");
-            return;
-        }
-        currentAudioFile.stop();
-        System.out.println("중지: " + currentAudioFile.getTitle());
-    }
-
-    /**
-     * 다음 곡을 재생합니다. 셔플/반복 모드를 반영합니다.
-     * @throws MusicPlaybackException 재생 중 오류 발생 시
-     */
-    public void next() throws MusicPlaybackException {
-        if (playlist.isEmpty()) {
-            throw new MusicPlaybackException("재생 목록이 비어 있습니다.");
-        }
-
-        // 단일 곡 반복 모드일 경우 현재 곡을 처음부터 다시 재생
-        if (isRepeatMode) {
-            if (currentAudioFile != null) {
-                currentAudioFile.stop(); // 현재 곡 중지 후
-                currentAudioFile.play(); // 다시 재생
-                System.out.println("단일 곡 반복: " + currentAudioFile.getTitle());
-            } else { // 현재 재생 중인 곡이 없으면 그냥 첫 곡 재생
-                play(0);
-            }
-            return;
-        }
-
-        int nextIndex;
-        if (isShuffleMode) {
-            nextIndex = random.nextInt(playlist.size());
-            // 현재 곡과 같은 곡이 나오지 않도록 할 수 있지만, 무작위성을 위해 허용합니다.
-            // 필요하다면 `while (nextIndex == currentPlayingIndex)` 로직을 추가할 수 있습니다.
-        } else {
-            nextIndex = currentPlayingIndex + 1;
-            if (nextIndex >= playlist.size()) { // 마지막 곡일 경우 처음으로 돌아갑니다.
-                nextIndex = 0;
-            }
-        }
-        play(nextIndex);
-    }
-
-    /**
-     * 이전 곡을 재생합니다. 셔플/반복 모드를 반영합니다.
-     * @throws MusicPlaybackException 재생 중 오류 발생 시
-     */
-    public void previous() throws MusicPlaybackException {
-        if (playlist.isEmpty()) {
-            throw new MusicPlaybackException("재생 목록이 비어 있습니다.");
-        }
-
-        // 단일 곡 반복 모드일 경우 현재 곡을 처음부터 다시 재생
-        if (isRepeatMode) {
-            if (currentAudioFile != null) {
-                currentAudioFile.stop();
-                currentAudioFile.play();
-                System.out.println("단일 곡 반복: " + currentAudioFile.getTitle());
-            } else {
-                play(0);
-            }
-            return;
-        }
-
-        int prevIndex;
-        if (isShuffleMode) {
-            prevIndex = random.nextInt(playlist.size());
-        } else {
-            prevIndex = currentPlayingIndex - 1;
-            if (prevIndex < 0) { // 첫 곡일 경우 마지막 곡으로 돌아갑니다.
-                prevIndex = playlist.size() - 1;
-            }
-        }
-        play(prevIndex);
-    }
-
-    /**
-     * 셔플 모드를 토글합니다.
-     */
-    public void toggleShuffle() {
-        isShuffleMode = !isShuffleMode;
-        System.out.println("셔플 모드: " + (isShuffleMode ? "ON" : "OFF"));
-    }
-
-    /**
-     * 반복 모드를 토글합니다.
-     */
-    public void toggleRepeat() {
-        isRepeatMode = !isRepeatMode;
-        System.out.println("반복 모드: " + (isRepeatMode ? "ON" : "OFF"));
-    }
-    
-    /**
-     * 특정 WAVAudioFile의 '좋아요' 상태를 토글합니다.
-     * @param audioFile '좋아요' 상태를 변경할 WAVAudioFile 객체
-     * @return 변경된 '좋아요' 상태 (true: 좋아요, false: 좋아요 취소)
-     */
-    public boolean toggleLike(WAVAudioFile audioFile) {
-        if (audioFile == null) return false;
-        audioFile.setLiked(!audioFile.isLiked());
-        System.out.println("'" + audioFile.getTitle() + "' 좋아요 상태: " + (audioFile.isLiked() ? "ON" : "OFF"));
-        return audioFile.isLiked();
-    }
-
-    /**
-     * '좋아요'된 모든 곡들을 반환합니다.
-     * @return '좋아요'된 WAVAudioFile 객체들의 리스트
-     */
-    public List<WAVAudioFile> getLikedSongs() {
-        return playlist.stream()
-                .filter(WAVAudioFile::isLiked) // isLiked()가 true인 곡만 필터링
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 현재 재생 중인 곡을 기준으로 추천 음악 목록을 가져옵니다.
-     * @return 추천 WAVAudioFile 객체 리스트
-     */
-    public List<WAVAudioFile> getRecommendedSongs() {
-        if (currentAudioFile == null) {
-            return new ArrayList<>(); 
-        }
-        
-        // <<<<<<<<<<<<<<<< musicData 필드 대신 getMusicData() 메서드 사용 >>>>>>>>>>>>>>>>>>
-        Music currentMusic = currentAudioFile.getMusicData();
-        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-
-        List<Music> allMusicData = playlist.stream()
-                                        // <<<<<<<<<<<<<<<< musicData 필드 대신 getMusicData() 메서드 사용 >>>>>>>>>>>>>>>>>>
-                                        .map(WAVAudioFile::getMusicData)
-                                        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-                                        .collect(Collectors.toList());
-        
-        List<Music> recommendedMusicData = recommendationManager.getRecommendedSongs(currentMusic, allMusicData);
-        
-        List<WAVAudioFile> recommendedWAVAudioFiles = new ArrayList<>();
-        for (Music recMusic : recommendedMusicData) {
-            for (WAVAudioFile wavFile : playlist) {
-                // Music 클래스의 equals/hashCode가 오버라이딩되어 있다면 더 정확합니다.
-                // <<<<<<<<<<<<<<<< musicData 필드 대신 getMusicData() 메서드 사용 >>>>>>>>>>>>>>>>>>
-                if (wavFile.getMusicData().equals(recMusic)) { 
-                // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-                    recommendedWAVAudioFiles.add(wavFile);
+        if (currentAudioFile != null && !playlist.isEmpty()) {
+            int newIndex = -1;
+             for (int i = 0; i < playlist.size(); i++) {
+                if (playlist.get(i).equals(currentAudioFile)) {
+                    newIndex = i;
                     break;
                 }
             }
+            if (newIndex != -1) {
+                currentSongIndex = newIndex; 
+                currentAudioFile = playlist.get(currentSongIndex);
+            } else { 
+                if(!playlist.isEmpty()){
+                    currentSongIndex = 0; 
+                    currentAudioFile = playlist.get(0);
+                    currentAudioFile.setVolume(masterVolume);
+                } else {
+                    currentSongIndex = -1;
+                    currentAudioFile = null;
+                    isPlaying = false;
+                    isPaused = false;
+                }
+            }
+        } else if (playlist.isEmpty()) { 
+            currentSongIndex = -1;
+            currentAudioFile = null;
+            isPlaying = false;
+            isPaused = false;
+        } else {
+            currentSongIndex = 0;
+            currentAudioFile = playlist.get(0);
+            currentAudioFile.setVolume(masterVolume);
         }
-        System.out.println("추천 목록 생성 완료. 현재 곡(" + currentMusic.getTitle() + ")과 같은 장르 " + currentMusic.getGenre() + "의 곡 " + recommendedWAVAudioFiles.size() + "개 추천.");
-        return recommendedWAVAudioFiles;
+        
+        if(shuffleMode){
+            WAVAudioFile playingBeforeShuffle = currentAudioFile;
+            Collections.shuffle(playlist, random);
+            if(playingBeforeShuffle != null) {
+                int newIndex = -1;
+                for (int i = 0; i < playlist.size(); i++) {
+                    if (playlist.get(i).equals(playingBeforeShuffle)) {
+                        newIndex = i;
+                        break;
+                    }
+                }
+                if (newIndex != -1) {
+                    currentSongIndex = newIndex;
+                    currentAudioFile = playlist.get(currentSongIndex);
+                }
+                else if (!playlist.isEmpty()) {
+                    currentSongIndex = 0;
+                    currentAudioFile = playlist.get(0);
+                }
+                else { currentSongIndex = -1; currentAudioFile = null; }
+            } else if (!playlist.isEmpty()) {
+                currentSongIndex = 0;
+                currentAudioFile = playlist.get(0);
+            } else {
+                currentSongIndex = -1;
+                currentAudioFile = null;
+            }
+        }
+        
+        gui.updatePlayerUI();
     }
 
+    public void clearPlaylist() {
+        stopPlaybackAndClearInternalLists();
+        gui.updatePlayerUI();
+    }
 
-    /**
-     * 현재 재생 중인 WAVAudioFile 객체를 반환합니다.
-     * @return 현재 재생 중인 WAVAudioFile, 없으면 null
+    private void stopPlaybackAndClearInternalLists() {
+        if (currentAudioFile != null) {
+            currentAudioFile.stopAudio(); 
+        }
+        for (WAVAudioFile audioFile : originalPlaylist) { 
+            audioFile.stopAudio();
+            audioFile.removeLineListener(this); 
+        }
+        playlist.clear();
+        originalPlaylist.clear();
+        currentAudioFile = null;
+        isPlaying = false;
+        isPaused = false;
+        currentSongIndex = -1;
+    }
+    
+    /*
+     * 음악을 재생하거나 일시정지 상태에서 재개.
      */
+    
+    public void play() throws MusicPlaybackException {
+        if (currentAudioFile == null) {
+            if (playlist.isEmpty()) {
+                throw new MusicPlaybackException("재생할 음악이 없습니다.");
+            }
+            if (currentSongIndex == -1) currentSongIndex = 0;
+            currentAudioFile = playlist.get(currentSongIndex);
+        }
+
+        if (currentAudioFile.isPlaying()) {
+             isPlaying = true; 
+             isPaused = false; 
+             gui.updatePlayerUI(); 
+             return;
+        }
+
+        if (isPaused) { 
+            currentAudioFile.resume();
+        } else { 
+            currentAudioFile.stopAudio(); 
+            currentAudioFile.openAudioStream(); 
+            currentAudioFile.play();
+        }
+
+        isPlaying = true; 
+        isPaused = false;
+        currentAudioFile.setVolume(masterVolume); 
+        gui.updatePlayerUI(); 
+    }
+
+    public void play(int index) throws MusicPlaybackException {
+        if (index < 0 || index >= playlist.size()) {
+            throw new MusicPlaybackException("유효하지 않은 재생 목록 인덱스입니다: " + index);
+        }
+        
+        if (currentAudioFile != null && currentAudioFile.equals(playlist.get(index)) && isPlaying) {
+             return; 
+        }
+
+        if (currentAudioFile != null) {
+            currentAudioFile.stopAudio(); 
+        }
+        
+        currentSongIndex = index; 
+        currentAudioFile = playlist.get(currentSongIndex);
+        
+        isPlaying = false; 
+        isPaused = false;
+        
+        play(); 
+    }
+
+    public void pause() throws MusicPlaybackException {
+        if (currentAudioFile == null) {
+            throw new MusicPlaybackException("재생 중인 음악이 없습니다.");
+        }
+        if (currentAudioFile.isPlaying()) { 
+            currentAudioFile.pause();
+            isPlaying = false; 
+            isPaused = true; 
+            gui.updatePlayerUI();
+        } else if (isPaused){ 
+            return;
+        } else { 
+            throw new MusicPlaybackException("음악이 재생 중이 아니므로 일시정지할 수 없습니다.");
+        }
+    }
+
+    public void stop() throws MusicPlaybackException {
+        if (currentAudioFile == null) {
+            isPlaying = false;
+            isPaused = false;
+            gui.updatePlayerUI();
+            return;
+        }
+        
+        currentAudioFile.stopAudio();
+        isPlaying = false;
+        isPaused = false;
+        gui.updatePlayerUI();
+    }
+
+    public void next() throws MusicPlaybackException {
+        if (playlist.isEmpty()) {
+            throw new MusicPlaybackException("재생할 다음 곡이 없습니다 (재생 목록 비어있음).");
+        }
+        
+        if (currentAudioFile != null) {
+            currentAudioFile.stopAudio();
+        }
+
+        if (shuffleMode) {
+            currentSongIndex = random.nextInt(playlist.size());
+        } else {
+            currentSongIndex++;
+            if (currentSongIndex >= playlist.size()) {
+                if (repeatMode) {
+                    currentSongIndex = 0;
+                } else {
+                    currentSongIndex = -1; 
+                    currentAudioFile = null;
+                    isPlaying = false;
+                    isPaused = false;
+                    gui.displayInfoMessage("재생 종료", "재생 목록의 마지막 곡입니다.");
+                    gui.updatePlayerUI();
+                    return; 
+                }
+            }
+        }
+        
+        if (currentSongIndex != -1) {
+            currentAudioFile = playlist.get(currentSongIndex);
+            currentAudioFile.setVolume(masterVolume); 
+            
+            isPlaying = false; 
+            isPaused = false;
+            
+            play(); 
+        } else {
+            gui.updatePlayerUI();
+        }
+    }
+
+    public void previous() throws MusicPlaybackException {
+        if (playlist.isEmpty()) {
+            throw new MusicPlaybackException("재생할 이전 곡이 없습니다 (재생 목록 비어있음).");
+        }
+
+        if (currentAudioFile != null) {
+            currentAudioFile.stopAudio();
+        }
+
+        if (shuffleMode) {
+            currentSongIndex = random.nextInt(playlist.size());
+        } else {
+            currentSongIndex--;
+            if (currentSongIndex < 0) {
+                 if (repeatMode) {
+                    currentSongIndex = playlist.size() - 1;
+                } else {
+                    currentSongIndex = -1; 
+                    currentAudioFile = null;
+                    isPlaying = false;
+                    isPaused = false;
+                    gui.displayInfoMessage("재생 종료", "재생 목록의 첫 곡입니다.");
+                    gui.updatePlayerUI();
+                    return; 
+                }
+            }
+        }
+
+        if (currentSongIndex != -1) {
+            currentAudioFile = playlist.get(currentSongIndex);
+            currentAudioFile.setVolume(masterVolume);
+            
+            isPlaying = false;
+            isPaused = false;
+
+            play();
+        } else {
+            gui.updatePlayerUI();
+        }
+    }
+
+    public List<WAVAudioFile> getPlaylist() {
+        return playlist;
+    }
+
     public WAVAudioFile getCurrentAudioFile() {
         return currentAudioFile;
     }
+
+    public int getCurrentSongIndex() { 
+        if (currentAudioFile != null && !playlist.isEmpty()) {
+            return playlist.indexOf(currentAudioFile);
+        }
+        return -1;
+    }
     
-    /**
-     * 현재 재생 중인지 여부를 반환합니다.
-     */
-    public boolean isPlaying() {
-        return currentAudioFile != null && currentAudioFile.isPlaying();
-    }
-    
-    /**
-     * 현재 일시정지 중인지 여부를 반환합니다.
-     */
-    public boolean isPaused() {
-        return currentAudioFile != null && currentAudioFile.isPaused();
-    }
-
-    /**
-     * 셔플 모드 활성화 여부를 반환합니다.
-     */
-    public boolean isShuffleMode() {
-        return isShuffleMode;
-    }
-
-    /**
-     * 반복 모드 활성화 여부를 반환합니다.
-     */
-    public boolean isRepeatMode() {
-        return isRepeatMode;
-    }
-
-    /**
-     * 현재 재생 목록을 반환합니다.
-     * @return 재생 목록 (WAVAudioFile 리스트)
-     */
-    public List<WAVAudioFile> getPlaylist() {
-        return Collections.unmodifiableList(playlist); // 외부에서 직접 수정 불가능하도록 unmodifiableList 반환
-    }
-
-    /**
-     * 모든 WAVAudioFile 리소스를 해제합니다. 애플리케이션 종료 시 호출해야 합니다.
-     */
-    public void closeAllAudioFiles() {
-        System.out.println("모든 오디오 파일 리소스 해제 시작.");
+    public void setVolume(float volume) {
+        if (volume < 0f || volume > 1f) {
+            throw new IllegalArgumentException("음량은 0.0f에서 1.0f 사이여야 합니다.");
+        }
+        this.masterVolume = volume;
         if (currentAudioFile != null) {
+            currentAudioFile.setVolume(masterVolume);
+        }
+        gui.updatePlayerUI();
+    }
+
+    public float getVolume() {
+        return masterVolume;
+    }
+
+    public void toggleShuffle() {
+        shuffleMode = !shuffleMode;
+        if (playlist.isEmpty()) {
+            gui.updatePlayerUI();
+            return;
+        }
+
+        boolean wasPlaying = isPlaying; 
+        long currentPosition = 0; 
+        WAVAudioFile currentlyPlayingInstance = currentAudioFile; 
+
+        if (currentlyPlayingInstance != null && wasPlaying) {
+            currentPosition = currentlyPlayingInstance.getCurrentPosition();
             try {
-                stop(); // 현재 재생 중인 파일 중지
-            } catch (MusicPlaybackException e) {
-                System.err.println("현재 곡 중지 중 오류: " + e.getMessage());
+                currentlyPlayingInstance.stopAudio();
+                isPlaying = false;
+                isPaused = false;
+            } catch (Exception e) {
+                System.err.println("셔플 중 오디오 정지 오류: " + e.getMessage());
             }
         }
-        for (WAVAudioFile audioFile : playlist) {
-            // "empty_file_path"와 같은 임시 Music 객체는 MusicPlayer를 가지지 않으므로 close 호출을 건너뜁니다.
-            if (!"empty_file_path".equals(audioFile.getFilePath())) {
-                audioFile.close(); // 각 WAVAudioFile 리소스 해제
+
+        if (shuffleMode) {
+            Collections.shuffle(playlist, random);
+        } else {
+            playlist.clear();
+            playlist.addAll(originalPlaylist); 
+        }
+
+        if (currentlyPlayingInstance != null) {
+            int newIndex = -1;
+            for (int i = 0; i < playlist.size(); i++) {
+                if (playlist.get(i).equals(currentlyPlayingInstance)) { 
+                    newIndex = i;
+                    break;
+                }
+            }
+
+            if (newIndex != -1) {
+                currentSongIndex = newIndex;
+                currentAudioFile = playlist.get(currentSongIndex); 
+                
+                if (wasPlaying) {
+                    try {
+                        play();     
+                        currentAudioFile.setPosition(currentPosition); 
+                    } catch (MusicPlaybackException e) {
+                        System.err.println("셔플 후 재생 재개 오류: " + e.getMessage());
+                    }
+                }
+            } else { 
+                if (!playlist.isEmpty()) {
+                    currentSongIndex = 0; 
+                    currentAudioFile = playlist.get(0);
+                    if (wasPlaying) {
+                        try {
+                            play();
+                        } catch (MusicPlaybackException e) {
+                            System.err.println("셔플 후 재생 재개 오류: " + e.getMessage());
+                        }
+                    }
+                } else {
+                    currentSongIndex = -1; 
+                    currentAudioFile = null;
+                    isPlaying = false; 
+                    isPaused = false;
+                }
+            }
+        } else if (!playlist.isEmpty()) { 
+            currentSongIndex = 0;
+            currentAudioFile = playlist.get(0);
+            isPlaying = false;
+            isPaused = false;
+        } else { 
+            currentSongIndex = -1; 
+            currentAudioFile = null;
+            isPlaying = false; 
+            isPaused = false;
+        }
+        
+        gui.updatePlaylistList();
+        gui.updatePlayerUI();
+    }
+
+    public void toggleRepeat() {
+        repeatMode = !repeatMode;
+        gui.updatePlayerUI();
+    }
+
+    public void toggleLike(WAVAudioFile audioFile) {
+        audioFile.setLiked(!audioFile.isLiked());
+        
+        for (Music music : allMusicList) {
+            if (music.getFilePath().equals(audioFile.getMusicData().getFilePath())) {
+                music.setLiked(audioFile.isLiked());
+                break;
             }
         }
-        playlist.clear();
-        currentPlayingIndex = -1;
-        currentAudioFile = null;
-        System.out.println("모든 오디오 파일 리소스 해제 완료.");
+        gui.updatePlayerUI();
+    }
+
+    public List<WAVAudioFile> getLikedSongs() {
+        return allMusicList.stream()
+                .filter(Music::isLiked)
+                .map(music -> {
+                    try {
+                        WAVAudioFile likedWav = new WAVAudioFile(music);
+                        likedWav.setVolume(masterVolume);
+                        likedWav.setLiked(true); 
+                        return likedWav;
+                    } catch (MusicFileNotFoundException | MusicPlaybackException e) {
+                        System.err.println("좋아요 곡 로드 실패: " + music.getTitle() + " - " + e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+    
+    public List<WAVAudioFile> getRecommendedSongs() {
+        if (currentAudioFile == null || currentAudioFile.getGenre() == null ||
+            currentAudioFile.getGenre().trim().isEmpty() ||
+            currentAudioFile.getGenre().equals("알 수 없는 장르")) {
+            return Collections.emptyList();
+        }
+
+        String targetGenre = currentAudioFile.getGenre();
+
+        return allMusicList.stream()
+                .filter(music -> !music.equals(currentAudioFile.getMusicData()))
+                .filter(music -> !music.isLiked()) 
+                .filter(music -> targetGenre.equals(music.getGenre()))
+                .map(music -> {
+                    try {
+                        WAVAudioFile recommendedWav = new WAVAudioFile(music);
+                        recommendedWav.setVolume(masterVolume); 
+                        return recommendedWav;
+                    } catch (MusicFileNotFoundException | MusicPlaybackException e) {
+                        System.err.println("추천 곡 로드 실패: " + music.getTitle() + " - " + e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    public boolean isPlaying() { return isPlaying; }
+    public boolean isPaused() { return isPaused; }
+    public boolean isShuffleMode() { return shuffleMode; }
+    public boolean isRepeatMode() { return repeatMode; }
+
+    public void closeAllAudioFiles() {
+        stopPlaybackAndClearInternalLists();
+    }
+
+    /*
+     * LineListener 인터페이스 구현: 오디오 라인 이벤트를 처리.
+     */
+    
+    @Override
+    public void update(LineEvent event) {
+        Clip eventClip = (Clip)event.getSource(); 
+        if (currentAudioFile == null || currentAudioFile.getClip() != eventClip) {
+            return; 
+        }
+
+        if (event.getType() == LineEvent.Type.STOP) {
+            if (isPlaying && !isPaused && !currentAudioFile.isPlaying() && 
+                currentAudioFile.getCurrentPosition() >= (currentAudioFile.getDuration() - 1000)) { 
+                
+                this.isPlaying = false; 
+                this.isPaused = false;
+                try {
+                    next(); 
+                } catch (MusicPlaybackException e) {
+                    System.err.println("자동 다음 곡 재생 중 오류: " + e.getMessage());
+                    gui.displayErrorMessage("자동 재생 오류", "다음 곡을 재생할 수 없습니다: " + e.getMessage());
+                    gui.updatePlayerUI();
+                }
+            } else {
+                gui.updatePlayerUI();
+            }
+        } else if (event.getType() == LineEvent.Type.START) {
+            if (!isPlaying) { 
+                isPlaying = true;
+                isPaused = false;
+                gui.updatePlayerUI(); 
+            }
+        } else if (event.getType() == LineEvent.Type.OPEN) {
+            if (currentAudioFile != null && currentAudioFile.getClip() == eventClip) {
+                currentAudioFile.setVolume(masterVolume);
+            }
+        }
     }
 }

@@ -4,22 +4,15 @@ import model.Music;
 
 import javax.sound.sampled.LineListener;
 
-/**
- * 모든 오디오 파일 객체가 가져야 할 공통적인 속성과 행위를 정의하는 추상 클래스.
- * model.Music 객체를 포함하여 음악 메타데이터를 관리하며,
- * 실제 재생 로직은 하위 클래스에서 구현함.
+/*
+ * 오디오 파일 재생을 위한 인터페이스
+ * 모든 오디오 파일 구현체가 따라야 할 계약을 정의.
  */
 
 public abstract class AudioFile {
     protected Music musicData;
     protected boolean isPlaying = false; // 현재 재생 중인지 여부
     protected boolean isPaused = false;  // 현재 일시정지 중인지 여부
-
-    /**
-     * 추상 클래스의 생성자는 model.Music 객체를 받아 초기화.
-     * @param musicData 음악 메타데이터 (제목, 가수, 파일 경로 등 포함)
-     * @throws MusicFileNotFoundException 음악 파일 경로가 유효하지 않을 때 발생
-     */
     
     public AudioFile(Music musicData) throws MusicFileNotFoundException {
         
@@ -44,16 +37,12 @@ public abstract class AudioFile {
     public abstract void setPosition(long microsecondPosition); // 특정 위치로 이동 (마이크로초 단위)
 
     
-    /**
-     * 이 AudioFile과 관련된 Music 메타데이터 객체를 반환합니다.
-     * @return Music 객체
-     */
     public Music getMusicData() {
         return musicData;
     }
     
 
-    // --- 메타데이터 접근자 (model.Music으로부터 프록시) ---
+    // --- 접근자 (model.Music으로부터 프록시) ---
     public String getTitle() {
         return musicData.getTitle();
     }
@@ -100,11 +89,7 @@ public abstract class AudioFile {
         musicData.setLiked(liked);
     }
     
-    /**
-     * AudioFile 객체의 문자열 표현을 반환합니다.
-     * model.Music의 toString()을 활용하여 좋아요 상태도 표시합니다.
-     * @return AudioFile 객체의 정보가 담긴 문자열
-     */
+    
     @Override
     public String toString() {
         return musicData.toString();

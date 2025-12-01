@@ -1,39 +1,37 @@
 package manage;
 
-import gui.MusicPlayerGUI;
+import gui.MusicPlayerGUI; 
 import main.ApplicationMain;
-import model.User;
+import model.User; 
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
 import java.awt.*;
-
+import java.util.Optional; 
 
 public class Login extends JFrame {
 
     JTextField idField;
     JPasswordField pwField;
+    private UserManager userManager; 
 
     public Login() {
-        
+        this.userManager = new UserManager(); 
+
         setTitle("Login");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE); 
 
-       GridBagLayout layout = new GridBagLayout();
-       GridBagConstraints gbc = new GridBagConstraints();
-
+        GridBagLayout layout = new GridBagLayout();
         Container c = getContentPane();
         c.setLayout(layout);
         
+        GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(10,10,10,10); 
-        
-        // 아이디, 패스워드 각각 라벨이랑 입력 필드 분리해 작성함
-        
+
         // 아이디 라벨 
         gbc.gridx = 0;
         gbc.gridy = 0;
@@ -47,7 +45,6 @@ public class Login extends JFrame {
         idField = new JTextField("");
         idField.setPreferredSize(new Dimension(180, 28)); 
         c.add(idField, gbc);
-        
         
         // 패스워드 라벨
         gbc.gridx = 0;
@@ -68,6 +65,7 @@ public class Login extends JFrame {
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.gridwidth = 2; 
+        gbc.fill = GridBagConstraints.HORIZONTAL; 
         gbc.anchor = GridBagConstraints.CENTER;
         c.add(loginBtn, gbc);
 
@@ -81,12 +79,24 @@ public class Login extends JFrame {
         gbc.gridy = 4;
         c.add(forgotBtn, gbc);
 
+        // Listener 연결
+        loginBtn.addActionListener(new MyActionListener()); 
         
-        loginBtn.addActionListener(new MyActionListener());
-        signUpBtn.addActionListener(new MyActionListener());
-        forgotBtn.addActionListener(new MyActionListener());
+        // 회원가입 버튼 리스너
+        signUpBtn.addActionListener(e -> { 
+            this.setVisible(false);
+            SignUp signUpDialog = new SignUp(this, userManager);
+            signUpDialog.showDialog();
+        });
         
-        setSize(450, 350);
+        // 비밀번호 찾기 버튼 리스너
+        forgotBtn.addActionListener(e -> { 
+            this.setVisible(false);
+            ForgotPassword forgotPasswordDialog = new ForgotPassword(this, userManager);
+            forgotPasswordDialog.showDialog();
+        });
+        
+        setSize(450, 350); 
         setLocationRelativeTo(null);
         setVisible(true);
     }
@@ -96,49 +106,25 @@ public class Login extends JFrame {
         public void actionPerformed(ActionEvent e) {
             JButton b = (JButton) e.getSource();
 
-            
+            // 로그인 버튼 눌렀을 때만 처리
             if (b.getText().equals("로그인")) {
                 String inputID = idField.getText();
-                String inputPW = new String(pwField.getPassword()); 
+                String inputPW = new String(pwField.getPassword());
 
-               
-                User registeredUser = getUserFromFile(); 
-
-                if (registeredUser == null) {
-                    JOptionPane.showMessageDialog(Login.this, "등록된 회원이 없습니다. 회원가입을 먼저 해주세요.", "로그인 오류", JOptionPane.WARNING_MESSAGE);
-                } else if (inputID.equals(registeredUser.getId()) && inputPW.equals(registeredUser.getPassword())) {
-                    JOptionPane.showMessageDialog(Login.this, "로그인 성공! " + registeredUser.getName() + "님 환영합니다.", "로그인 성공", JOptionPane.INFORMATION_MESSAGE);
-                    dispose(); 
-                    new MusicPlayerGUI();
+                // UserManager를 사용하여 로그인 검증
+                if (userManager.validateLogin(inputID, inputPW)) { 
+                    Optional<User> loggedInUser = userManager.findUserById(inputID);
+                    if (loggedInUser.isPresent()) {
+                        JOptionPane.showMessageDialog(Login.this, "로그인 성공! " + loggedInUser.get().getName() + "님 환영합니다.", "로그인 성공", JOptionPane.INFORMATION_MESSAGE);
+                        dispose();
+                        new MusicPlayerGUI();
+                    } else {
+                        JOptionPane.showMessageDialog(Login.this, "알 수 없는 오류가 발생했습니다. 사용자 정보를 찾을 수 없습니다.", "오류", JOptionPane.ERROR_MESSAGE);
+                    }
                 } else {
                     JOptionPane.showMessageDialog(Login.this, "아이디 또는 비밀번호가 틀렸습니다. 다시 입력해주세요.", "로그인 실패", JOptionPane.WARNING_MESSAGE);
                 }
             }
-
-            if (b.getText().equals("회원가입")) {
-                new SignUp();
-            }
-            if (b.getText().equals("비밀번호 찾기")) {
-                new ForgotPassword();
-            }
-        }
-
-        
-        private User getUserFromFile() {
-            String filePath = ApplicationMain.BASE_RESOURCE_PATH + "users.txt"; 
-            try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-                String line;
-                if ((line = reader.readLine()) != null) {
-                    String[] parts = line.split(",");
-                    if (parts.length >= 4) { 
-                       
-                        return new User(parts[0], parts[1], parts[2], parts[3]);
-                    }
-                }
-            } catch (IOException e) {
-                System.err.println("사용자 정보 파일을 읽는 중 오류 발생: " + e.getMessage());
-            }
-            return null; 
         }
     }
 }

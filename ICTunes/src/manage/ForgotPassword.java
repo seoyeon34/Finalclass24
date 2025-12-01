@@ -1,83 +1,200 @@
 package manage;
 
-import main.ApplicationMain;
 import model.User;
 
-import java.awt.*;
-import java.awt.event.*;
 import javax.swing.*;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter; 
+import java.awt.event.WindowEvent;   
+import java.util.Optional;
 
-public class ForgotPassword extends JFrame {
+/*
+ * 비밀번호 찾기 기능을 제공하는 다이얼로그.
+ */
 
-    JTextField phoneField;
+public class ForgotPassword extends JDialog {
 
-    public ForgotPassword() {
-        setTitle("ICTunes 비밀번호 찾기");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(350, 200);
-        setLocationRelativeTo(null);
+    private UserManager userManager;
+    private JFrame parentFrame; 
+    
+    private JTextField inputField; 
+    private JButton searchButton;
+    private JLabel statusLabel; 
+    
+    private JPanel newPasswordPanel; 
+    private JPasswordField newPasswordField;
+    private JPasswordField newPasswordFieldConfirm; 
+    private JButton resetPasswordButton;
+    
+    private User currentUserForReset; 
 
-        GridLayout grid = new GridLayout(3, 2, 10, 10);
-        Container c = getContentPane();
-        c.setLayout(grid);
-        ((JPanel)c).setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+    public ForgotPassword(JFrame parent, UserManager userManager) {
+        super(parent, "비밀번호 찾기", true); 
+        this.parentFrame = parent; 
+        this.userManager = userManager;
+        
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE); 
+        setSize(400, 350);
+        setLocationRelativeTo(parent);
+        setLayout(new BorderLayout(10, 10)); 
 
-        c.add(new JLabel("전화번호 입력:"));
-        phoneField = new JTextField(20);
-        c.add(phoneField);
-
-        JButton findBtn = new JButton("비밀번호 찾기");
-        c.add(findBtn);
-        c.add(new JLabel(""));
-
-        findBtn.addActionListener(new ActionListener() {
+        
+        addWindowListener(new WindowAdapter() {
             @Override
-            public void actionPerformed(ActionEvent e) {
-                String inputPhone = phoneField.getText().trim();
-
-                if (inputPhone.isEmpty()) {
-                    JOptionPane.showMessageDialog(ForgotPassword.this, "전화번호를 입력하세요.", "경고", JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                
-                if (!inputPhone.matches("\\d+")) {
-                    JOptionPane.showMessageDialog(ForgotPassword.this, "전화번호는 숫자만 입력해주세요.", "입력 오류", JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-
-                User registeredUser = getUserFromFile();
-
-                if (registeredUser != null && inputPhone.equals(registeredUser.getPhone())) {
-                    // 사용자 아이디와 이름을 함께 표시
-                    JOptionPane.showMessageDialog(ForgotPassword.this,
-                        "아이디: " + registeredUser.getId() + "\n비밀번호: " + registeredUser.getPassword() + "\n이름: " + registeredUser.getName(),
-                        "비밀번호 찾기 성공", JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    JOptionPane.showMessageDialog(ForgotPassword.this, "입력하신 전화번호로 등록된 정보를 찾을 수 없습니다.", "정보 불일치", JOptionPane.ERROR_MESSAGE);
+            public void windowClosed(WindowEvent e) { 
+                if (parentFrame != null) {
+                    parentFrame.setVisible(true); 
                 }
             }
         });
+
+        
+        JPanel topSearchPanel = new JPanel();
+        topSearchPanel.setLayout(new BoxLayout(topSearchPanel, BoxLayout.Y_AXIS));
+        topSearchPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        
+        JPanel idInputPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        idInputPanel.add(new JLabel("아이디 입력:"));
+        inputField = new JTextField(15);
+        idInputPanel.add(inputField);
+        topSearchPanel.add(idInputPanel);
+        topSearchPanel.add(Box.createVerticalStrut(10)); 
+
+        
+        searchButton = new JButton("사용자 확인");
+        searchButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        topSearchPanel.add(searchButton);
+        topSearchPanel.add(Box.createVerticalStrut(10)); 
+
+
+        statusLabel = new JLabel("아이디를 입력하고 '사용자 확인' 버튼을 눌러주세요.");
+        statusLabel.setForeground(Color.BLUE);
+        statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        topSearchPanel.add(statusLabel);
+        
+        add(topSearchPanel, BorderLayout.NORTH);
+
+        newPasswordPanel = new JPanel();
+        newPasswordPanel.setLayout(new BoxLayout(newPasswordPanel, BoxLayout.Y_AXIS));
+        newPasswordPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        newPasswordPanel.setVisible(false); 
+
+
+        JPanel newPassPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        newPassPanel.add(new JLabel("새 비밀번호:"));
+        newPasswordField = new JPasswordField(15);
+        newPassPanel.add(newPasswordField);
+        newPasswordPanel.add(newPassPanel);
+        newPasswordPanel.add(Box.createVerticalStrut(5));
+
+
+        JPanel confirmPassPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        confirmPassPanel.add(new JLabel("새 비밀번호 확인:"));
+        newPasswordFieldConfirm = new JPasswordField(15); 
+        confirmPassPanel.add(newPasswordFieldConfirm);
+        newPasswordPanel.add(confirmPassPanel);
+        newPasswordPanel.add(Box.createVerticalStrut(10));
+
+
+        resetPasswordButton = new JButton("비밀번호 재설정");
+        resetPasswordButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        newPasswordPanel.add(resetPasswordButton);
+        
+
+        add(newPasswordPanel, BorderLayout.CENTER); 
+
+
+        inputField.addActionListener(e -> performUserSearch());
+        searchButton.addActionListener(e -> performUserSearch());
+        newPasswordField.addActionListener(e -> resetUserPassword());
+        newPasswordFieldConfirm.addActionListener(e -> resetUserPassword());
+        resetPasswordButton.addActionListener(e -> resetUserPassword());
     }
 
-    // 파일에서 사용자 정보 읽어오는 메서드
-    private User getUserFromFile() {
-        String filePath = ApplicationMain.BASE_RESOURCE_PATH + "users.txt"; 
-        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-            String line;
-            if ((line = reader.readLine()) != null) {
-                String[] parts = line.split(",");
-                // 파일 저장 포맷이 ID,PW,PHONE,NAME 이므로 4개 필드
-                if (parts.length >= 4) { 
-                    
-                    return new User(parts[0], parts[1], parts[2], parts[3]);
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("사용자 정보 파일을 읽는 중 오류 발생: " + e.getMessage());
+
+    private void performUserSearch() {
+        String query = inputField.getText().trim();
+        if (query.isEmpty()) {
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("아이디를 입력해주세요.");
+            return;
         }
-        return null; // 사용자 정보가 없거나 오류 발생 시
+
+        Optional<User> foundUser = userManager.findUserById(query);
+        
+        if (foundUser.isPresent()) {
+            currentUserForReset = foundUser.get();
+            statusLabel.setForeground(Color.GREEN);
+            statusLabel.setText(currentUserForReset.getUserId() + " 님 확인되었습니다. 새 비밀번호를 입력하세요.");
+            newPasswordPanel.setVisible(true);
+            newPasswordField.setText("");
+            newPasswordFieldConfirm.setText(""); 
+            newPasswordField.requestFocusInWindow();
+        } else {
+            currentUserForReset = null;
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("해당 아이디와 일치하는 사용자를 찾을 수 없습니다.");
+            newPasswordPanel.setVisible(false);
+        }
+    }
+
+
+    private void resetUserPassword() {
+        if (currentUserForReset == null) {
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("먼저 아이디를 확인해주세요.");
+            return;
+        }
+
+        String newPass = new String(newPasswordField.getPassword());
+        String confirmPass = new String(newPasswordFieldConfirm.getPassword()); 
+
+        if (newPass.isEmpty() || confirmPass.isEmpty()) {
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("새 비밀번호와 확인 비밀번호를 모두 입력해주세요.");
+            return;
+        }
+        
+        if (newPass.length() < 8) {
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("비밀번호는 최소 8자 이상 입력해야 합니다.");
+            return;
+        }
+
+        if (!newPass.equals(confirmPass)) {
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("새 비밀번호와 확인 비밀번호가 일치하지 않습니다.");
+            return;
+        }
+
+        if (newPass.equals(currentUserForReset.getPassword())) {
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("현재 사용중인 비밀번호와 동일합니다."); 
+            return;
+        }
+
+        if (userManager.resetPassword(currentUserForReset.getUserId(), newPass)) {
+            statusLabel.setForeground(Color.BLUE);
+            statusLabel.setText("비밀번호가 성공적으로 재설정되었습니다.");
+            JOptionPane.showMessageDialog(this, "비밀번호가 성공적으로 재설정되었습니다. 로그인 화면으로 돌아갑니다.");
+            dispose(); 
+        } else {
+            statusLabel.setForeground(Color.RED);
+            statusLabel.setText("비밀번호 재설정에 실패했습니다.");
+        }
+    }
+
+    public void showDialog() {
+
+        inputField.setText("");
+        newPasswordField.setText("");
+        newPasswordFieldConfirm.setText("");
+        newPasswordPanel.setVisible(false);
+        statusLabel.setText("아이디를 입력하고 '사용자 확인' 버튼을 눌러주세요.");
+        inputField.requestFocusInWindow();
+        setVisible(true); 
     }
 }

@@ -1,17 +1,16 @@
 package function;
 
-import playlist.AllMusicList; // AllMusicList의 Music 순서와 매칭하기 위함
-import model.Music;          // Music 모델 import
+import playlist.AllMusicList;
+import model.Music;
 
 import java.util.List;
 
-/**
- * 음악 가사 데이터를 제공하는 유틸리티 클래스입니다.
- * (현재는 하드코딩된 시뮬레이션 가사를 제공합니다.)
+/*
+ * 음악 가사 데이터를 제공하는 클래스.
  */
 public class Lyrics {
 
-    // AllMusicList.initializeMusicList()에 정의된 순서와 일치하도록 가사를 배열합니다.
+    // AllMusicList.initializeMusicList()에 정의된 순서와 일치하도록 가사를 배열.
     private static final String[] LYRICS_SIMULATION = {
         // 응급실 - izi
         "후회 하고 있어요 \n"
@@ -616,8 +615,8 @@ public class Lyrics {
         + "어두워진, hah, 앞길속에 (Ah)\n"
         + "Given the throne, I didn't know how to believe\n"
         + "I was the queen that I'm meant to be\n"
-        + "I lived two lives, tried to play both sides\n"
-        + "But I couldn't find my own place\n"
+        + "I lived two lives, tried to play both sides\n"
+        + "But I couldn't find my own place\n"
         + "Called a problem child 'cause I got too wild\n"
         + "But now that's how I'm getting paid, 끝없이 on stage\n"
         + "I'm done hidin', now I'm shinin' like I'm born to be\n"
@@ -857,12 +856,6 @@ public class Lyrics {
         + "Ya Ya 너로 시작될 MY Drama"
     };
 
-    /**
-     * Music 객체의 인덱스를 기반으로 가사를 반환합니다.
-     * 이 메서드는 AllMusicList의 초기화 순서와 LYRICS_SIMULATION 배열의 순서가 일치할 때 정확합니다.
-     * @param index 가사를 찾을 음악의 인덱스
-     * @return 해당 인덱스의 가사 문자열, 없으면 null
-     */
     public static String getLyricsByIndex(int index) {
         if (index >= 0 && index < LYRICS_SIMULATION.length) {
             return LYRICS_SIMULATION[index];
@@ -870,15 +863,8 @@ public class Lyrics {
         return null;
     }
 
-    /**
-     * Music 객체의 제목과 가수를 기반으로 가사를 찾아 반환합니다.
-     * AllMusicList에서 해당 Music 객체의 인덱스를 찾아 LYRICS_SIMULATION 배열에서 가사를 조회합니다.
-     * @param title 찾을 음악의 제목
-     * @param artist 찾을 음악의 가수
-     * @return 해당 제목과 가수의 가사 문자열, 없으면 "가사를 찾을 수 없습니다." 메시지
-     */
     public static String getLyricsByTitleAndArtist(String title, String artist) {
-        List<Music> allMusic = AllMusicList.getAllMusic(); // AllMusicList에서 전체 음악 목록을 가져옵니다.
+        List<Music> allMusic = AllMusicList.getAllMusic(); // 전체 음악 목록을 가져옴
         for (int i = 0; i < allMusic.size(); i++) {
             Music m = allMusic.get(i);
             if (m.getTitle().equals(title) && m.getArtist().equals(artist)) {

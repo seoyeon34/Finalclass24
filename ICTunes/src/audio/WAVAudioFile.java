@@ -1,180 +1,246 @@
 package audio;
 
-import model.Music;          // Music 모델 클래스 import
-import playback.MusicPlayer; // 실제 WAV 파일 재생을 담당하는 MusicPlayer import
+import main.ApplicationMain;
+import model.Music;
 
-import javax.sound.sampled.LineEvent;
-import javax.sound.sampled.LineListener;
-import javax.sound.sampled.LineUnavailableException;
-import javax.sound.sampled.UnsupportedAudioFileException;
+import javax.sound.sampled.*;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
-/**
- * WAV 형식의 오디오 파일을 표현하고 재생을 관리하는 구체적인 클래스입니다.
- * AudioFile 추상 클래스를 상속받으며, 내부적으로 playback.MusicPlayer를 사용하여 실제 오디오 처리를 위임합니다.
+/*
+ * WAV 오디오 파일을 관리하고 재생을 제어하는 클래스.
  */
-public class WAVAudioFile extends AudioFile {
-    private MusicPlayer audioPlayer; // 실제 오디오 재생을 담당하는 플레이어
 
-    /**
-     * WAVAudioFile의 생성자입니다. model.Music 객체를 받아 초기화하고,
-     * 실제 오디오 재생을 위해 playback.MusicPlayer를 로드합니다.
-     *
-     * @param musicData 이 WAVAudioFile이 표현하는 음악의 메타데이터
-     * @throws MusicFileNotFoundException 음악 파일이 존재하지 않거나 유효하지 않을 때 발생
-     * @throws MusicPlaybackException     오디오 시스템 오류 등으로 인해 재생 준비에 실패할 때 발생
-     */
-    public WAVAudioFile(Music musicData) throws MusicFileNotFoundException, MusicPlaybackException {
-        super(musicData); // 상위 AudioFile 클래스의 생성자 호출 (파일 경로 유효성 검사 포함)
+public class WAVAudioFile { 
 
-        // 실제 파일 경로를 다시 확인 (super 생성자에서 기본적인 유효성 검사를 했지만, File 객체 생성 전 다시 확인)
-        File file = new File(musicData.getFilePath());
-        if (!file.exists() || !file.isFile()) {
-            throw new MusicFileNotFoundException("지정된 WAV 음악 파일을 찾을 수 없거나 유효하지 않습니다: " + musicData.getFilePath());
+    private Music musicData; 
+    private String filePath; 
+
+    private Clip clip;
+    private long lastPosition; 
+
+    private List<LineListener> externalLineListeners; 
+
+    private final String uniqueId; 
+    
+    private FloatControl gainControl; 
+
+    public WAVAudioFile(Music music) throws MusicFileNotFoundException, MusicPlaybackException {
+        this.musicData = music;
+        this.filePath = music.getFilePath();
+        this.externalLineListeners = new ArrayList<>();
+        this.uniqueId = generateUniqueId(music);
+
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path) || !Files.isReadable(path)) {
+            throw new MusicFileNotFoundException("오디오 파일이 존재하지 않거나 읽을 수 없습니다: " + filePath);
         }
-        if (!file.getName().toLowerCase().endsWith(".wav")) {
-            throw new MusicFileNotFoundException("지원하지 않는 오디오 파일 형식입니다. WAV 파일만 지원됩니다: " + musicData.getFilePath());
+
+        openAudioStream(); 
+    }
+
+    public WAVAudioFile(String filePath) throws MusicFileNotFoundException, MusicPlaybackException {
+        this.filePath = filePath;
+        File file = new File(filePath);
+        String fileName = file.getName();
+        String title = fileName.substring(0, fileName.lastIndexOf('.'));
+        this.musicData = new Music(title, "알 수 없는 아티스트", "알 수 없는 장르", 0, "알 수 없는 앨범", filePath, ApplicationMain.BASE_RESOURCE_PATH + "images/default_cover.jpg");
+        this.externalLineListeners = new ArrayList<>();
+        this.uniqueId = generateUniqueId(musicData);
+
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path) || !Files.isReadable(path)) {
+            throw new MusicFileNotFoundException("오디오 파일이 존재하지 않거나 읽을 수 없습니다: " + filePath);
         }
 
-        try {
-            audioPlayer = new MusicPlayer();
-            // playback.MusicPlayer에 리스너 등록: 재생이 끝나면 자동으로 isPlaying 상태를 false로 변경합니다.
-            // 이 리스너는 내부적으로 동작하며, MusicPlayerGUI에 연결되는 리스너와는 별개입니다.
-            audioPlayer.addPlaybackListener(event -> {
-                if (event.getType() == LineEvent.Type.STOP) {
-                    // STOP 이벤트가 발생했으나 일시정지가 아닌 경우 (자연스러운 재생 종료)
-                    // 현재 음악이 실제로 재생 중이었다면 (isPlaying이 true인 경우) 상태를 업데이트합니다.
-                    if (WAVAudioFile.this.isPlaying && !audioPlayer.isPaused()) {
-                        WAVAudioFile.this.isPlaying = false;
-                        WAVAudioFile.this.isPaused = false;
-                        System.out.println("음악 재생 완료: " + getTitle());
-                    }
-                }
-            });
-            audioPlayer.load(musicData.getFilePath()); // 오디오 파일을 MusicPlayer에 로드
-        } catch (LineUnavailableException e) {
-            throw new MusicPlaybackException("오디오 라인을 사용할 수 없습니다: " + e.getMessage(), e);
-        } catch (IOException e) {
-            throw new MusicPlaybackException("오디오 파일 로드 중 입출력 오류가 발생했습니다: " + e.getMessage(), e);
-        } catch (UnsupportedAudioFileException e) {
-            throw new MusicPlaybackException("지원하지 않는 오디오 파일 형식입니다. WAV 파일만 지원됩니다: " + e.getMessage(), e);
+        openAudioStream();
+    }
+    
+    public void openAudioStream() throws MusicPlaybackException {
+    	
+        if (clip != null && clip.isOpen()) {
+            for(LineListener listener : externalLineListeners) {
+                
+                clip.removeLineListener(listener); 
+            }
+            clip.close();
+            clip = null; 
         }
         
-        System.out.println("WAVAudioFile '" + getTitle() + "' 로드 준비 완료.");
+        try {
+            AudioInputStream audioStream = AudioSystem.getAudioInputStream(new File(filePath));
+            clip = AudioSystem.getClip();
+            clip.open(audioStream);
+            this.lastPosition = 0; 
+            
+            // 음량 조절 컨트롤 가져오기
+            if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+            } else {
+                gainControl = null;
+                System.err.println("[WAVAudioFile] MASTER_GAIN 컨트롤이 지원되지 않습니다.");
+            }
+
+            
+            for(LineListener listener : externalLineListeners) {
+                clip.addLineListener(listener);
+            }
+        } catch (UnsupportedAudioFileException e) {
+            throw new MusicPlaybackException("지원되지 않는 오디오 파일 형식입니다: " + filePath, e);
+        } catch (IOException e) {
+            throw new MusicPlaybackException("오디오 파일 입출력 오류 : " + filePath, e);
+        } catch (LineUnavailableException e) {
+            throw new MusicPlaybackException("오디오 라인을 사용할 수 없습니다 : " + filePath, e);
+        }
     }
 
-    /**
-     * 음악 재생을 시작하거나 일시정지된 상태에서 재개합니다.
-     * @throws MusicPlaybackException 재생 중 오류 발생 시
-     */
-    @Override
     public void play() throws MusicPlaybackException {
-        if (audioPlayer == null) {
-            throw new MusicPlaybackException("오디오 플레이어가 초기화되지 않았습니다.");
+        if (clip == null || !clip.isOpen()) {
+            throw new MusicPlaybackException("재생을 시작할 수 없습니다. (경로: " + filePath + ")");
         }
-        if (audioPlayer.isPaused()) { // 일시정지 상태에서 재개
-            audioPlayer.play();
-            isPlaying = true;
-            isPaused = false;
-        } else if (!audioPlayer.isPlaying()) { // 처음 재생하거나 중지 후 재생
-            audioPlayer.play();
-            isPlaying = true;
-            isPaused = false;
-        }
-        // 이미 재생 중인 경우 아무것도 하지 않음 (또는 예외 발생)
+        clip.start();
     }
 
-    /**
-     * 현재 재생 중인 음악을 일시정지합니다.
-     * @throws MusicPlaybackException 일시정지 중 오류 발생 시
-     */
-    @Override
     public void pause() throws MusicPlaybackException {
-        if (audioPlayer == null) {
-            throw new MusicPlaybackException("오디오 플레이어가 초기화되지 않았습니다.");
+        if (clip == null || !clip.isOpen()) {
+            throw new MusicPlaybackException("일시정지할 수 없습니다. (경로: " + filePath + ")");
         }
-        if (audioPlayer.isPlaying() && !audioPlayer.isPaused()) {
-            audioPlayer.pause();
-            isPlaying = false;
-            isPaused = true;
-        }
-    }
-
-    /**
-     * 현재 재생 중인 음악을 완전히 중지합니다.
-     * @throws MusicPlaybackException 중지 중 오류 발생 시
-     */
-    @Override
-    public void stop() throws MusicPlaybackException {
-        if (audioPlayer != null && (audioPlayer.isPlaying() || audioPlayer.isPaused())) {
-            audioPlayer.stop();
-            isPlaying = false;
-            isPaused = false;
+        if (clip.isRunning()) {
+            lastPosition = clip.getMicrosecondPosition();
+            clip.stop();
         }
     }
 
-    /**
-     * 이 오디오 파일과 관련된 모든 리소스를 해제합니다.
-     */
-    @Override
-    public void close() {
-        if (audioPlayer != null) {
-            audioPlayer.stop(); // 먼저 재생 중인 것을 중지
-            // audioPlayer.close()와 같은 명시적 메서드가 playback.MusicPlayer에 없으므로
-            // stop()이 리소스 해제 역할도 겸하도록 설계된 것으로 판단됩니다.
-            // 필요하다면 playback.MusicPlayer에 별도의 close()를 추가할 수 있습니다.
-            audioPlayer = null; // 참조 해제
+    public void resume() throws MusicPlaybackException {
+        if (clip == null || !clip.isOpen()) {
+            throw new MusicPlaybackException("재생을 재개할 수 없습니다. (경로: " + filePath + ")");
         }
-        isPlaying = false;
-        isPaused = false;
-        System.out.println("WAVAudioFile '" + getTitle() + "' 리소스 해제 완료.");
+        if (!clip.isRunning()) {
+            clip.setMicrosecondPosition(lastPosition);
+            clip.start();
+        }
+    }
+
+    public void stopAudio() {
+        if (clip != null && clip.isOpen()) {
+            try {
+                for(LineListener listener : externalLineListeners) {
+                    if (clip != null) { 
+                        clip.removeLineListener(listener);
+                    }
+                }
+                clip.stop();
+                clip.close(); 
+                lastPosition = 0;
+            } catch (Exception e) {
+                System.err.println("clip 정지 또는 닫기 중 오류: " + e.getMessage());
+            } finally {
+                clip = null; 
+            }
+        }
+    }
+
+    public void setPosition(long microseconds) throws MusicPlaybackException {
+        if (clip == null || !clip.isOpen()) {
+            throw new MusicPlaybackException("재생 위치를 설정할 수 없습니다. (경로: " + filePath + ")");
+        }
+        clip.setMicrosecondPosition(microseconds);
+        lastPosition = microseconds;
     }
     
-    /**
-     * 현재 재생 위치를 반환합니다.
-     * @return 현재 재생 위치 (마이크로초 단위), 재생 중이 아니면 0
-     */
-    @Override
-    public long getCurrentPosition() {
-        if (audioPlayer != null) {
-            return audioPlayer.getCurrentPosition();
+    public void setVolume(float volume) {
+        if (gainControl == null || clip == null || !clip.isOpen()) {
+            return; 
         }
-        return 0;
+        if (volume < 0f || volume > 1f) {
+            throw new IllegalArgumentException("음량은 0.0f에서 1.0f 사이여야 합니다.");
+        }
+        
+        float minGain = gainControl.getMinimum();
+        float maxGain = gainControl.getMaximum();
+        
+        float gain;
+        if (volume == 0.0f) { 
+            gain = minGain;
+        } else {
+            final float LOG_MIN_VOLUME_REF = (float)Math.log10(0.0001f); 
+            final float LOG_MAX_VOLUME_REF = (float)Math.log10(1.0f);   
+            
+            float logVolume = (float)Math.log10(volume);
+            float linearMappedVolume = (logVolume - LOG_MIN_VOLUME_REF) / (LOG_MAX_VOLUME_REF - LOG_MIN_VOLUME_REF);
+            
+            gain = minGain + (maxGain - minGain) * linearMappedVolume;
+            gain = Math.max(minGain, Math.min(maxGain, gain));
+        }
+        gainControl.setValue(gain);
+    }
+
+    public float getVolume() {
+        if (gainControl == null || clip == null || !clip.isOpen()) {
+            return 1.0f; 
+        }
+        float dB = gainControl.getValue();
+        float minGain = gainControl.getMinimum();
+        float maxGain = gainControl.getMaximum();
+
+        if (dB <= minGain) return 0.0f;
+        
+        final float LOG_MIN_VOLUME_REF = (float)Math.log10(0.0001f);
+        final float LOG_MAX_VOLUME_REF = (float)Math.log10(1.0f);
+        
+        float linearMappedGain = (dB - minGain) / (maxGain - minGain);
+        float logVolume = LOG_MIN_VOLUME_REF + (LOG_MAX_VOLUME_REF - LOG_MIN_VOLUME_REF) * linearMappedGain;
+        
+        float volume = (float) Math.pow(10, logVolume);
+        
+        return Math.max(0.0f, Math.min(1.0f, volume));
     }
     
-    /**
-     * 전체 재생 길이를 반환합니다.
-     * @return 전체 재생 길이 (마이크로초 단위), 로드되지 않았으면 0
-     */
-    @Override
-    public long getDuration() {
-        if (audioPlayer != null) {
-            return audioPlayer.getDuration();
+    public void addLineListener(LineListener listener) {
+        if (listener != null && !externalLineListeners.contains(listener)) {
+            externalLineListeners.add(listener);
+            if (clip != null) { 
+                clip.addLineListener(listener);
+            }
         }
-        return 0;
     }
-
-    /**
-     * 지정된 위치로 음악 재생 포인터를 이동합니다.
-     * @param microsecondPosition 이동할 위치 (마이크로초 단위)
-     */
-    @Override
-    public void setPosition(long microsecondPosition) {
-        if (audioPlayer != null) {
-            audioPlayer.setMicrosecondPosition(microsecondPosition);
+    
+    public void removeLineListener(LineListener listener) {
+        if (listener != null) {
+            externalLineListeners.remove(listener);
+            if (clip != null) { 
+                clip.removeLineListener(listener);
+            }
         }
     }
 
-    /**
-     * playback.MusicPlayer의 LineListener를 직접 등록할 수 있도록 합니다.
-     * 주로 GUI에서 재생 완료 등의 이벤트를 받기 위함입니다.
-     * @param listener 추가할 LineListener
-     */
-    @Override
-    public void addPlaybackListener(LineListener listener) {
-        if (audioPlayer != null) {
-            audioPlayer.addPlaybackListener(listener);
-        }
+    public Clip getClip() {
+        return clip;
     }
+
+    public boolean isPlaying() { return clip != null && clip.isRunning(); }
+    public boolean isOpen() { return clip != null && clip.isOpen(); }
+    public long getCurrentPosition() { return clip != null ? clip.getMicrosecondPosition() : 0; }
+    public long getDuration() { return clip != null ? clip.getMicrosecondLength() : 0; }
+    
+    public Music getMusicData() { return musicData; }
+    public String getTitle() { return musicData.getTitle(); }
+    public String getArtist() { return musicData.getArtist(); }
+    public String getGenre() { return musicData.getGenre(); }
+    public int getReleaseYear() { return musicData.getReleaseYear(); }
+    public String getAlbum() { return musicData.getAlbum(); }
+    public String getCoverPath() { return musicData.getCoverPath(); }
+    public boolean isLiked() { return musicData.isLiked(); }
+    public void setLiked(boolean liked) { musicData.setLiked(liked); }
+    
+    private String generateUniqueId(Music music) { return music.getFilePath(); }
+
+    @Override public boolean equals(Object o) { if (this == o) return true; if (o == null || getClass() != o.getClass()) return false; WAVAudioFile that = (WAVAudioFile) o; return uniqueId.equals(that.uniqueId); }
+    @Override public int hashCode() { return uniqueId.hashCode(); }
 }
